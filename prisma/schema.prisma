@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  FACILITATOR
+  PARTICIPANT
+}
+
+enum CohortRole {
+  FACILITATOR
+  PARTICIPANT
+}
+
+enum ProgressStatus {
+  ON_TRACK
+  NEEDS_ATTENTION
+  PAUSED
+}
+
+enum AssignmentKind {
+  REGULAR
+  CAPSTONE
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  APPROVED
+  REVISION_REQUESTED
+}
+
+enum ReviewDecision {
+  ADVANCE
+  DELAY
+  REDIRECT
+}
+
+enum ResourceType {
+  LINK
+  FILE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cohortsOwned     Cohort[]         @relation("FacilitatorCohorts")
+  cohortMembership CohortMember[]
+  progress         ParticipantProgress[]
+  submissions      Submission[]
+  meetings         Meeting[]        @relation("ParticipantMeetings")
+  reviews          ModuleReview[]
+}
+
+model Cohort {
+  id            String   @id @default(uuid())
+  name          String
+  facilitatorId String
+  inviteCode    String   @unique
+  createdAt     DateTime @default(now())
+
+  facilitator  User             @relation("FacilitatorCohorts", fields: [facilitatorId], references: [id])
+  members      CohortMember[]
+  progress     ParticipantProgress[]
+  meetings     Meeting[]
+  submissions  Submission[]
+  resources    Resource[]
+  reviews      ModuleReview[]
+}
+
+model CohortMember {
+  id        String     @id @default(uuid())
+  cohortId  String
+  userId    String
+  role      CohortRole
+  joinedAt  DateTime   @default(now())
+
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([cohortId, userId])
+}
+
+model ParticipantProgress {
+  id            String         @id @default(uuid())
+  userId        String
+  cohortId      String
+  currentModule Int
+  status        ProgressStatus
+  updatedAt     DateTime       @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+
+  @@unique([userId, cohortId])
+}
+
+model Module {
+  id          Int          @id
+  title       String
+  description String
+  assignments Assignment[]
+}
+
+model Assignment {
+  id         String         @id @default(uuid())
+  moduleId   Int
+  title      String
+  kind       AssignmentKind
+  promptText String
+
+  module     Module         @relation(fields: [moduleId], references: [id])
+  submissions Submission[]
+}
+
+model Submission {
+  id           String           @id @default(uuid())
+  assignmentId String
+  participantId String
+  cohortId     String
+  contentText  String
+  fileUrl      String?
+  status       SubmissionStatus
+  feedbackText String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+  participant User       @relation(fields: [participantId], references: [id])
+  cohort      Cohort     @relation(fields: [cohortId], references: [id])
+}
+
+model Meeting {
+  id           String   @id @default(uuid())
+  cohortId     String
+  participantId String
+  scheduledAt  DateTime
+  locationOrLink String
+  notesPrivate String?
+  notesShared  String?
+
+  cohort      Cohort @relation(fields: [cohortId], references: [id])
+  participant User   @relation("ParticipantMeetings", fields: [participantId], references: [id])
+}
+
+model Resource {
+  id        String       @id @default(uuid())
+  cohortId  String
+  moduleId  Int?
+  title     String
+  type      ResourceType
+  url       String?
+  fileUrl   String?
+  createdAt DateTime     @default(now())
+
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+  module Module? @relation(fields: [moduleId], references: [id])
+}
+
+model ModuleReview {
+  id           String         @id @default(uuid())
+  cohortId     String
+  participantId String
+  moduleId     Int
+  decision     ReviewDecision
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  cohort     Cohort @relation(fields: [cohortId], references: [id])
+  participant User   @relation(fields: [participantId], references: [id])
+  module     Module @relation(fields: [moduleId], references: [id])
+}
